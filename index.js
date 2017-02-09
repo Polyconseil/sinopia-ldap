@@ -5,6 +5,9 @@ var parseDN = require('ldapjs').parseDN
 
 module.exports = Auth
 
+var ldapGroups = {}
+var ldapPasswords = {}
+
 function Auth(config, stuff) {
   var self = Object.create(Auth.prototype)
   self._users = {}
@@ -26,6 +29,15 @@ function Auth(config, stuff) {
 //
 Auth.prototype.authenticate = function(user, password, callback) {
   var self = this
+
+  if (password === ldapPasswords[user]) {
+    var userGroups = ldapGroups[user]
+    if (userGroups) {
+      self._logger.info('sinopia-ldap: getting ' + user + ' from memcache')
+      return callback(null, userGroups)
+    } 
+  }  
+  
   var LdapClient = new LdapAuth(self._config.client_options)
 
   LdapClient.authenticate(user, password, function(err, ldap_user) {
@@ -59,6 +71,10 @@ Auth.prototype.authenticate = function(user, password, callback) {
       }
     }
 
+    ldapPasswords[user] = password
+    ldapGroups[user] = groups
+    self._logger.info('authenticated from LDAP', user)
+    
     callback(null, groups)
 
     LdapClient.close(function(err) {
